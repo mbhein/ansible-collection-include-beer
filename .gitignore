@@ -1,3 +1,7 @@
+# ignore local dev items
+ansible.cfg
+inventory
+
 /tests/output/
 /changelogs/.plugin-cache.yaml
 
