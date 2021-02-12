@@ -1,0 +1,171 @@
+---
+# Playbook to create RPi OS SD card with bootable headless image
+# 
+# Ensures SD card is mounted/available at /dev/disk2
+# Downloads latest RPi 32-bit or 64-bit lite release (-e arch=[32-bit|64-bit] default is 32-bit)
+# Downloads Balena flash application
+# Formats SD card with RPi image
+# Touches SSH file to enable SSH
+# If wifi_networks (see below for more info) is defined, creates wpa_supplicant.conf file with all networks listed
+# Enable UART and set minimum gpu_mem=16
+
+# wifi_networks variable is a list of wifi networks and their associated pre-shared keys
+# Example:
+#     wifi_networks:
+#       - ssid: mywifi
+#         psk: mysupersecretpassword (should be stored in vault)
+#
+# Need to run with -K to use elevated privileges to format SD disk
+# ansible-playbook playbooks/rpios_sd_card.yml -K -e arch=[32-bit|64-bit]
+
+- name: Create Headless Bootable SD Card
+  hosts: localhost
+  gather_facts: true
+  vars:
+    boot_volume: /Volumes/boot
+    sd_disk: /dev/disk2
+    arch: 32-bit
+    raspios_32bit_latest_url: https://downloads.raspberrypi.org/raspios_lite_armhf_latest
+    raspios_64bit_latest_url: https://downloads.raspberrypi.org/raspios_lite_arm64_latest
+    download_dir: "{{ lookup('env', 'HOME') }}/Downloads"
+    application_dir: "{{ lookup('env', 'HOME') }}/Applications"
+    balena_git_user: balena-io
+    balena_cli_repo: balena-cli
+    balena_app_dir: "{{ application_dir }}/balena-cli"
+    raspios_image_dir: "{{ download_dir }}/raspios-images"
+  tasks:
+
+    - name: Ensure disk2 is mounted
+      block:
+        - name: Ensure {{ sd_disk }} is mounted
+          shell: "diskutil list | grep {{ sd_disk }}"
+          args:
+            warn: false
+          changed_when: false
+
+      rescue:
+        - name: Get Disks present on host
+          shell: diskutil list
+          args:
+            warn: false
+          register: disks_list
+
+        - name: Going to end play - {{ sd_disk }} not mounted
+          debug:
+            msg: "{{ disks_list.stdout_lines }}"
+
+        - meta: end_play
+
+    - name: Get latest Raspberry PI OS Release
+      uri:
+        url: "{{ _url }}"
+        follow_redirects: none
+        method: GET
+        status_code: 302
+        validate_certs: no
+      vars:
+        _url: "{{ raspios_64bit_latest_url if arch == '64-bit' else raspios_32bit_latest_url }}"
+      register: latest_image_url
+    
+    - name: Set Raspberry PI OS Image facts
+      set_fact:
+        latest_raspios_image_url: "{{ latest_image_url.location }}"
+        latest_raspios_sha256_url: "{{ latest_image_url.location }}.sha256"
+        latest_raspios_image: "{{ latest_image_url.location.split('/')[-1] }}"
+
+    - name: Show raspios Image facts
+      debug:
+        msg: 
+          - "{{ latest_raspios_image }}"
+          - "{{ latest_raspios_image_url }}"
+          - "{{ latest_raspios_sha256_url }}"
+
+    - name: Ensure raspios image dir exists
+      file:
+        path: "{{ raspios_image_dir }}"
+        state: directory
+
+    - name: See if we have latest image already
+      stat:
+        path: "{{ raspios_image_dir }}/{{ latest_raspios_image }}"
+      register: latest_image_present
+
+    - name: Download Latest raspios Image
+      get_url:
+        url: "{{ latest_raspios_image_url }}"
+        dest: "{{ raspios_image_dir }}/{{ latest_raspios_image }}"
+        checksum: "sha256:{{ latest_raspios_sha256_url }}"
+      register: latest_download_image
+      when: not latest_image_present.stat.exists
+
+    - name: Get github3
+      pip:
+        name: github3.py
+
+    - name: Get latest version of Balena CLI
+      github_release:
+        user: "{{ balena_git_user }}"
+        repo: "{{ balena_cli_repo }}"
+        action: latest_release
+      register: latest_balena_cli
+
+    - name: Download and unarchive Latest Balena CLI Zip
+      unarchive:
+        src: https://github.com/balena-io/balena-cli/releases/download/{{ latest_balena_cli.tag }}/{{ _latest_zip }}
+        dest: "{{ application_dir }}"
+        remote_src: true
+      vars:
+        _latest_zip: "balena-cli-{{ latest_balena_cli.tag }}-macOS-x64-standalone.zip"
+    
+    - name: Format SD Card with latest raspios Image
+      command: "./balena local flash {{ raspios_image_dir }}/{{ latest_raspios_image }} --drive {{ sd_disk }} --yes"
+      become: true
+      become_method: sudo
+      args:
+        chdir: "{{ balena_app_dir }}"
+        warn: false
+      register: balena_format_results
+
+    - name: Show Formatting Results
+      debug:
+        msg:
+          - "{{ balena_format_results.stdout_lines }}"
+
+    - name: Touch ssh file on boot volume
+      file:
+        path: "{{ boot_volume }}/ssh"
+        state: touch
+      tags:
+        - headless
+
+    - name: Create Wireless configuration file
+      blockinfile:
+        path: "{{ boot_volume }}/wpa_supplicant.conf"
+        state: present
+        create: true
+        block: | 
+          country={{ wifi_country | default('US') }}
+          ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
+          update_config=1
+          {% for network in wifi_networks %}
+          network={
+                  ssid="{{ network.ssid }}"
+                  psk="{{ network.psk }}"
+          }
+          {% endfor %}
+      when: wifi_networks is defined
+      tags:
+        - headless
+
+    - name: Enable UART
+      blockinfile:
+        path: "{{ boot_volume }}/config.txt"
+        state: present
+        create: true
+        block: | 
+          # Enable UART
+          enable_uart=1
+          # Set minimum GPU Memory
+          gpu_mem=16
+      tags:
+        - headless
