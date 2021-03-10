@@ -1,11 +1,6 @@
 ---
 # Debian 10 tasks
 
-- name: Hello from Debian 10
-  debug:
-    msg: "Hello from Debian 10"
-
-
 # echo 'kernel.unprivileged_userns_clone=1' > /etc/sysctl.d/00-local-userns.conf
 - name: Enable user namespaces as root user
   lineinfile:
