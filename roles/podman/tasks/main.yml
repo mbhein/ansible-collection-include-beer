@@ -1,0 +1,6 @@
+---
+# tasks file for podman
+
+- name: Include Specific Distribution Tasks
+  include_tasks:
+    file: "{{ ansible_facts.distribution }}_{{ ansible_facts.distribution_version }}.yml"
