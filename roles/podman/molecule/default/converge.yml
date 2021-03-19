@@ -1,0 +1,12 @@
+---
+- name: Converge
+  hosts: all
+  become: true
+  tasks:
+    - name: "Show Ansible Distribution"
+      debug:
+        msg: "{{ ansible_facts.distribution }} - {{ ansible_facts.distribution_version }}"
+
+    - name: "Include podman"
+      include_role:
+        name: "podman"

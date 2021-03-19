@@ -1,0 +1,3 @@
+---
+# defaults file for docker
+docker_install_script: /usr/local/src/get-docker.sh

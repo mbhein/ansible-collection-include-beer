@@ -1,0 +1,16 @@
+galaxy_info:
+  author: Matthew Hein
+  description: Role to install Docker on Raspberry PI OS
+
+  license: license (GPL-3.0-only)
+
+  min_ansible_version: 2.10
+
+  platforms:
+  - name: Raspbery PI OS
+    versions:
+    - 10 (Debian Buster)
+
+  galaxy_tags: []
+
+dependencies: []

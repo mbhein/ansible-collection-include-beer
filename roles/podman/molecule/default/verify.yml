@@ -1,0 +1,15 @@
+---
+# Verify Podman role.
+
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+
+  - name: Get podman version
+    command: podman --version
+    register: podman_version
+
+  - name: Example assertion
+    assert:
+      that: "'podman version' in podman_version.stdout"

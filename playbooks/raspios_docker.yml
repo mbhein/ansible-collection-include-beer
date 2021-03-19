@@ -1,0 +1,12 @@
+---
+# Playbook to install and test docker on raspios
+
+- name: Install and test docker
+  hosts: all
+  gather_facts: true
+  become: true
+  tasks:
+
+    - name: "Include Docker"
+      include_role:
+        name: "docker"

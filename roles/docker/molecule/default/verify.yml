@@ -1,0 +1,15 @@
+---
+# Verify docker role.
+
+- name: Verify
+  hosts: all
+  gather_facts: false
+  tasks:
+
+  - name: Get docker version
+    command: docker --version
+    register: docker_version
+
+  - name: Example assertion
+    assert:
+      that: "'Docker version' in docker_version.stdout"
