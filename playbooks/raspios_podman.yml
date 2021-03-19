@@ -1,0 +1,12 @@
+---
+# Playbook to install and test podman on raspios
+
+- name: Install and test podman
+  hosts: all
+  gather_facts: true
+  become: true
+  tasks:
+
+    - name: "Include podman"
+      include_role:
+        name: "podman"

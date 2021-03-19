@@ -1,0 +1,43 @@
+---
+# tasks file for docker
+
+- name: Install apt-utils
+  apt:
+    name: apt-utils
+
+- name: Check if docker service exists
+  systemd:
+    name: docker
+  register: docker_exists
+
+- name: Get Docker install script
+  get_url:
+    url: https://get.docker.com
+    validate_certs: false
+    dest: "{{ docker_install_script }}"
+    mode: 0755
+    force: true
+  when: docker_exists.status.LoadState == 'not-found'
+
+- name: Run Docker install script # noqa 305
+  shell: "{{ docker_install_script }}"
+  register: docker_install_results
+  when: docker_exists.status.LoadState == 'not-found'
+
+- name: Show Docker Install Output
+  debug:
+    msg:
+      - "{{ docker_install_results.stderr_lines }}"
+      - "{{ docker_install_results.stdout_lines }}"
+  when: docker_install_results is changed
+
+- name: Ensure docker service is running
+  systemd:
+    name: docker
+    state: started
+
+- name: Add pi user to docker group
+  user:
+    name: pi
+    groups: docker
+    append: true

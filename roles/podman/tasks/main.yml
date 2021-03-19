@@ -1,6 +1,77 @@
 ---
 # tasks file for podman
 
-- name: Include Specific Distribution Tasks
-  include_tasks:
-    file: "{{ ansible_facts.distribution }}_{{ ansible_facts.distribution_version }}.yml"
+# echo 'kernel.unprivileged_userns_clone=1' > /etc/sysctl.d/00-local-userns.conf
+- name: Enable user namespaces as root user
+  lineinfile:
+    path: /etc/sysctl.d/00-local-userns.conf
+    line: 'kernel.unprivileged_userns_clone=1'
+    create: true
+    mode: 0755
+  register: user_namespace
+
+- name: Restart procps
+  systemd:
+    service: procps
+    state: restarted
+  when: user_namespace is changed
+
+- name: Install Debian Archive Key-ring # noqa 403
+  apt:
+    name: debian-archive-keyring
+    state: latest
+
+- name: Add Debian Key-ring for buster-backports
+  apt_key:
+    keyserver: keyserver.ubuntu.com
+    id: "{{ item }}"
+    state: present
+  loop:
+    - 648ACFD622F3D138
+    - 04EE7237B7D453EC
+
+# echo 'deb http://deb.debian.org/debian buster-backports main' >> /etc/apt/sources.list
+- name: Use buster-backports on Debian 10 for a newer libseccomp2
+  apt_repository:
+    repo: deb http://deb.debian.org/debian buster-backports main
+    state: present
+
+# curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/Debian_10/Release.key | sudo apt-key add -
+- name: Add libcontainers apt key
+  apt_key:
+    url: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/Debian_10/Release.key
+    state: present
+
+# echo 'deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/Debian_10/ /' > /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+- name: Add libcontainers repo
+  apt_repository:
+    repo: deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/Debian_10/ /
+    state: present
+    filename: devel:kubic:libcontainers:stable
+
+# sudo apt-get update
+- name: Run the equivalent of "apt-get update" as a separate step
+  apt:
+    update_cache: yes
+
+# sudo apt-get -y -t buster-backports install libseccomp2
+- name: Install libseccomp2 from buster-backports # noqa 403
+  apt:
+    name: libseccomp2
+    state: latest
+    default_release: buster-backports
+
+# sudo apt-get -y install podman
+- name: Install podman # noqa 403
+  apt:
+    name: podman
+    state: latest
+  register: install_podman
+
+# # Restart dbus for rootless podman
+- name: Restart dbus
+  systemd:
+    name: dbus
+    state: restarted
+  when: install_podman is changed
+# systemctl --user restart dbus

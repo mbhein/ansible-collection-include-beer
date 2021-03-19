@@ -1,5 +1,5 @@
 ---
-# This is an example playbook to execute Ansible tests.
+# Verify Podman role.
 
 - name: Verify
   hosts: all
@@ -13,4 +13,3 @@
   - name: Example assertion
     assert:
       that: "'podman version' in podman_version.stdout"
-

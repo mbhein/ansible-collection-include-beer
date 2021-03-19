@@ -1,6 +1,6 @@
 galaxy_info:
   author: Matthew Hein
-  description: Role to install podman on Raspberry PI OS
+  description: Role to install Docker on Raspberry PI OS
 
   license: license (GPL-3.0-only)
 
